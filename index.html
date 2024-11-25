@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video Stream Preview and Capture</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body, html {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            font-family: Arial, sans-serif;
+            background-color: #8fbbea;
+            color: white;
+            overflow: hidden;
+        }
+
+        #preview-frame {
+            width: 80%;
+            max-width: 400px;
+            border: 2px solid #ffffff;
+            border-radius: 10px;
+            overflow: hidden;
+            aspect-ratio: 3 / 2;
+            background-color: #333;
+        }
+
+        #preview-video {
+            width: 100%;
+            /* height: 100%; */
+            object-fit: cover;
+        }
+
+        #capture-button {
+            margin-top: 20px;
+            padding: 10px 20px;
+            font-size: 16px;
+            background-color: #007BFF;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-bottom: 1rem;
+        }
+
+        #container {
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        #previewImage {
+            width: 300px;
+        }
+    </style>
+</head>
+<body>
+    <h1 style="display: none;" id="loader">Loading...</h1>
+   <div id="container">
+        <div id="preview-frame">
+            <video id="preview-video" autoplay muted></video>
+        </div>
+        <button id="capture-button">Capturar en Full HD</button>
+    </div>
+    <img id="previewImage" alt="">
+
+    <script>
+        const previewVideo = document.getElementById('preview-video');
+        const captureButton = document.getElementById('capture-button');
+        const loader = document.getElementById('loader');
+        const container = document.getElementById('container');
+        let previewStream;
+
+        async function startLowResPreview() {
+            try {
+                // Stream de baja resolución para previsualización
+                previewStream = await navigator.mediaDevices.getUserMedia({
+                    video: { width: 820, height: 480, facingMode: 'environment' }
+                });
+                previewVideo.srcObject = previewStream;
+
+            } catch (error) {
+                console.error("Error al acceder a la cámara:", error);
+            }
+        }
+
+        // Function to stop any active stream
+        function stopStream(stream) {
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+            }
+        }
+
+        // Capture button functionality
+        async function captureImage() {
+
+            // start loader
+            loader.style.display = 'block'
+            container.style.display = 'none'
+
+            // Stop the low-res stream temporarily
+            stopStream(previewStream);
+
+            // Start the high-res stream for capture
+            captureStream = await navigator.mediaDevices.getUserMedia({
+                video: { 
+                    width: 1920, 
+                    height: 1080, 
+                    facingMode: 'environment',
+                    advanced: [
+                            { focusMode: "continuous" }
+                ]}
+            });
+            const videoTrack = captureStream.getVideoTracks()[0];
+            const { width, height } = videoTrack.getSettings();
+
+            // Wait for the stream to load into the video element
+            previewVideo.srcObject = captureStream;            
+            await new Promise(resolve => previewVideo.onloadedmetadata = resolve);
+
+             // Ensure the video is playing
+            previewVideo.play();
+
+            // Add a brief delay to ensure frame availability
+            await new Promise(resolve => setTimeout(resolve, 100)); 
+
+            // Set canvas size to high-res dimensions and capture the frame
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            const context = canvas.getContext('2d');
+            context.drawImage(previewVideo, 0, 0, canvas.width, canvas.height);
+            const highResImage = canvas.toDataURL('image/jpeg'); // Get the high-res capture
+
+            // Stop the high-res stream and return to low-res preview
+            stopStream(captureStream);
+            await startLowResPreview();
+
+            // end loader
+            loader.style.display = 'none'
+
+            return highResImage; // You can now use or save this high-res image
+        }
+
+        captureButton.addEventListener('click', async () => {
+            const capturedImage = await captureImage();
+            console.log('High-res image captured:', capturedImage); // Do something with the image
+            const previewImage = document.getElementById('previewImage')
+            // previewImage.src = 'https://24ai.tech/es/wp-content/uploads/sites/5/2023/10/01_product_1_sdelat-kvadratnym-3-1.jpg'
+            previewImage.src = capturedImage
+        });
+
+        // Iniciar ambos streams al cargar la página
+        window.addEventListener('load', startLowResPreview);
+    </script>
+</body>
+</html>
